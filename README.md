@@ -28,7 +28,11 @@ pip install pandas numpy openpyxl
 ### 运行分析
 
 ```bash
+# 生成完整分析报告和数据表
 python3 analyze_turbine_data.py
+
+# (可选) 生成文本可视化摘要
+python3 visualize_results.py
 ```
 
 ## 分析维度
@@ -97,7 +101,9 @@ python3 analyze_turbine_data.py
 
 ## 脚本说明
 
-`analyze_turbine_data.py` 主要功能模块:
+### analyze_turbine_data.py
+
+主要功能模块:
 
 - `parse_csv_file()`: 解析单个CSV文件
 - `load_all_data()`: 加载所有风机数据
@@ -107,6 +113,14 @@ python3 analyze_turbine_data.py
 - `comparative_analysis()`: 对比分析
 - `save_summary_tables()`: 保存汇总数据表
 - `generate_report()`: 生成Markdown报告
+
+### visualize_results.py
+
+可视化工具，提供:
+- 关键绩效指标(KPI)摘要
+- 月度和季节性趋势图表
+- TOP 10机组性能对比
+- 健康度评分分布
 
 ## 技术栈
 
