@@ -157,6 +157,76 @@ def calculate_basic_statistics(df):
     
     return stats_df
 
+def calculate_detailed_state_breakdown(df):
+    """
+    Calculate detailed breakdown of all operational states (including maintenance)
+    Returns: DataFrame with detailed state statistics per turbine and overall
+    """
+    print("\n=== Calculating Detailed State Breakdown ===")
+    
+    # Define all status codes and their names
+    # Note: Using ordered dict to maintain order from most important to least
+    state_info = {
+        5: '(5)发电状态',
+        9: '(9)维护状态',
+        2: '(2)停机状态',
+        3: '(3)待机状态',
+        4: '(4)启机状态',
+        1: '(1)停机过程',
+        0: '(0)初始化'
+    }
+    
+    # Per-turbine breakdown
+    turbine_breakdown = []
+    
+    for turbine_id in sorted(df['turbine_id'].unique(), key=lambda x: int(x)):
+        turbine_data = df[df['turbine_id'] == turbine_id]
+        total_hours = turbine_data['duration_hours'].sum()
+        
+        row = {'turbine_id': turbine_id, 'total_hours': total_hours}
+        
+        # Calculate hours and percentage for each state
+        for code, state_name in state_info.items():
+            state_hours = turbine_data[turbine_data['status_code'] == code]['duration_hours'].sum()
+            state_pct = (state_hours / total_hours * 100) if total_hours > 0 else 0
+            
+            row[f'state_{code}_hours'] = state_hours
+            row[f'state_{code}_percentage'] = state_pct
+        
+        turbine_breakdown.append(row)
+    
+    turbine_breakdown_df = pd.DataFrame(turbine_breakdown)
+    
+    # Sort by turbine ID
+    turbine_breakdown_df['turbine_id_num'] = turbine_breakdown_df['turbine_id'].astype(int)
+    turbine_breakdown_df = turbine_breakdown_df.sort_values('turbine_id_num').drop('turbine_id_num', axis=1)
+    
+    # Overall breakdown (all turbines combined)
+    overall_breakdown = []
+    total_all_hours = df['duration_hours'].sum()
+    
+    for code, state_name in state_info.items():
+        state_hours = df[df['status_code'] == code]['duration_hours'].sum()
+        state_pct = (state_hours / total_all_hours * 100) if total_all_hours > 0 else 0
+        
+        overall_breakdown.append({
+            'state_code': code,
+            'state_name': state_name,
+            'total_hours': state_hours,
+            'percentage': state_pct
+        })
+    
+    overall_breakdown_df = pd.DataFrame(overall_breakdown)
+    # Keep the order as defined (5, 9, 2, 3, 4, 1, 0)
+    
+    print(f"Calculated state breakdown for {len(turbine_breakdown_df)} turbines")
+    print(f"Overall state distribution calculated")
+    
+    return {
+        'per_turbine': turbine_breakdown_df,
+        'overall': overall_breakdown_df
+    }
+
 def analyze_anomalies(df):
     """
     Identify anomalies:
@@ -347,7 +417,7 @@ def comparative_analysis(stats_df, health_df):
         'avg_health': avg_health
     }
 
-def save_summary_tables(stats_df, anomalies, trends, comparison):
+def save_summary_tables(stats_df, anomalies, trends, comparison, state_breakdown):
     """Save summary tables to CSV files"""
     print("\n=== Saving Summary Tables ===")
     
@@ -399,8 +469,18 @@ def save_summary_tables(stats_df, anomalies, trends, comparison):
     comparison['top_10_worst'].to_csv(os.path.join(OUTPUT_DIR, 'top_10_worst_turbines.csv'), 
                                       index=False, encoding='utf-8-sig')
     print("Saved: top_10_best_turbines.csv and top_10_worst_turbines.csv")
+    
+    # 9. Detailed state breakdown - NEW
+    state_breakdown['per_turbine'].to_csv(os.path.join(OUTPUT_DIR, 'detailed_state_breakdown.csv'),
+                                          index=False, encoding='utf-8-sig')
+    print("Saved: detailed_state_breakdown.csv")
+    
+    # 10. Overall state distribution - NEW
+    state_breakdown['overall'].to_csv(os.path.join(OUTPUT_DIR, 'overall_state_distribution.csv'),
+                                      index=False, encoding='utf-8-sig')
+    print("Saved: overall_state_distribution.csv")
 
-def generate_report(stats_df, anomalies, trends, comparison):
+def generate_report(stats_df, anomalies, trends, comparison, state_breakdown):
     """Generate comprehensive markdown analysis report"""
     print("\n=== Generating Analysis Report ===")
     
@@ -461,6 +541,102 @@ def generate_report(stats_df, anomalies, trends, comparison):
     
     report.append("")
     report.append("详细数据请参考: `analysis_output/turbine_basic_statistics.csv`")
+    report.append("")
+    
+    # NEW SECTION: Detailed State Breakdown Analysis
+    report.append("### 1.4 发电利用率低的原因分析")
+    report.append("")
+    report.append("#### 💡 为什么发电利用率只有37.93%？")
+    report.append("")
+    report.append("通过对所有风机运行状态的详细分解，我们发现机组时间主要分配如下：")
+    report.append("")
+    
+    # Overall state distribution table
+    overall = state_breakdown['overall']
+    report.append("**整体状态分布（所有74台风机）：**")
+    report.append("")
+    report.append("| 状态 | 状态码 | 累计时长(小时) | 占比 |")
+    report.append("|------|-------|---------------|------|")
+    
+    for _, row in overall.iterrows():
+        report.append(f"| {row['state_name']} | {row['state_code']} | {row['total_hours']:,.2f} | **{row['percentage']:.2f}%** |")
+    
+    report.append("")
+    
+    # Key insights based on state distribution
+    state_5 = overall[overall['state_code'] == 5].iloc[0]['percentage'] if not overall[overall['state_code'] == 5].empty else 0
+    state_9 = overall[overall['state_code'] == 9].iloc[0]['percentage'] if not overall[overall['state_code'] == 9].empty else 0
+    state_4 = overall[overall['state_code'] == 4].iloc[0]['percentage'] if not overall[overall['state_code'] == 4].empty else 0
+    state_3 = overall[overall['state_code'] == 3].iloc[0]['percentage'] if not overall[overall['state_code'] == 3].empty else 0
+    state_2 = overall[overall['state_code'] == 2].iloc[0]['percentage'] if not overall[overall['state_code'] == 2].empty else 0
+    state_1 = overall[overall['state_code'] == 1].iloc[0]['percentage'] if not overall[overall['state_code'] == 1].empty else 0
+    state_0 = overall[overall['state_code'] == 0].iloc[0]['percentage'] if not overall[overall['state_code'] == 0].empty else 0
+    
+    report.append("**关键发现：**")
+    report.append("")
+    report.append(f"1. **发电状态 (5)**: 仅占 **{state_5:.2f}%**，说明风机实际发电时间不足40%")
+    report.append(f"2. **维护状态 (9)**: 占 **{state_9:.2f}%**，维护时间显著")
+    report.append(f"3. **停机状态 (2)**: 占 **{state_2:.2f}%**，是影响发电的主要因素")
+    report.append(f"4. **待机状态 (3)**: 占 **{state_3:.2f}%**，风机处于等待状态")
+    report.append(f"5. **启机状态 (4)**: 占 **{state_4:.2f}%**，过渡状态")
+    report.append(f"6. **停机过程 (1)**: 占 **{state_1:.2f}%**，过渡状态")
+    if state_0 > 0:
+        report.append(f"7. **初始化 (0)**: 占 **{state_0:.2f}%**，系统初始化")
+    report.append("")
+    
+    # Calculate non-generation time breakdown
+    non_gen_time = 100 - state_5
+    maintenance_contribution = state_9 / non_gen_time * 100 if non_gen_time > 0 else 0
+    shutdown_contribution = (state_2 + state_1) / non_gen_time * 100 if non_gen_time > 0 else 0
+    standby_contribution = state_3 / non_gen_time * 100 if non_gen_time > 0 else 0
+    starting_contribution = state_4 / non_gen_time * 100 if non_gen_time > 0 else 0
+    other_contribution = state_0 / non_gen_time * 100 if non_gen_time > 0 else 0
+    
+    report.append("**非发电时间分解：**")
+    report.append("")
+    report.append(f"在 **{non_gen_time:.2f}%** 的非发电时间中：")
+    report.append(f"- **维护状态**: 占 {maintenance_contribution:.1f}% (相当于总时间的{state_9:.2f}%)")
+    report.append(f"- **停机相关状态** (停机+停机过程): 占 {shutdown_contribution:.1f}% (相当于总时间的{state_2+state_1:.2f}%)")
+    report.append(f"- **待机状态**: 占 {standby_contribution:.1f}% (相当于总时间的{state_3:.2f}%)")
+    report.append(f"- **启机状态**: 占 {starting_contribution:.1f}% (相当于总时间的{state_4:.2f}%)")
+    if state_0 > 0:
+        report.append(f"- **其他状态** (初始化等): 占 {other_contribution:.1f}% (相当于总时间的{state_0:.2f}%)")
+    report.append("")
+    
+    report.append("**结论：**")
+    report.append("")
+    if state_9 > 20:
+        report.append(f"📌 发电利用率低的主要原因是 **维护时间过长** ({state_9:.2f}%)，其次是停机时间({state_2:.2f}%)。")
+        report.append("   **这不是维护效率的问题，而是维护时间确实很长**，建议：")
+        report.append("   - 优化维护计划，缩短维护周期")
+        report.append("   - 采用预防性维护，减少计划外维护")
+        report.append("   - 提升维护效率，缩短单次维护时间")
+    elif state_2 > 15:
+        report.append(f"📌 发电利用率低的主要原因是 **停机时间过长** ({state_2:.2f}%)，维护时间({state_9:.2f}%)也有一定影响。")
+        report.append("   建议重点分析停机原因，减少计划外停机时间，同时优化维护计划。")
+    elif state_3 > 15:
+        report.append(f"📌 发电利用率低的原因是多方面的：停机({state_2:.2f}%)、维护({state_9:.2f}%)、待机({state_3:.2f}%)。")
+        report.append("   建议综合优化：减少停机和维护时间，优化调度策略降低待机时间。")
+    else:
+        report.append(f"📌 非发电时间主要分布在维护({state_9:.2f}%)、停机({state_2:.2f}%)等多个状态，需要综合优化。")
+    report.append("")
+    
+    # Sample turbine state distribution
+    report.append("**单机状态分布示例（前5台机组）：**")
+    report.append("")
+    report.append("| 机组 | 发电% | 维护% | 停机% | 待机% | 启机% | 停机过程% |")
+    report.append("|------|-------|-------|-------|-------|-------|----------|")
+    
+    for _, row in state_breakdown['per_turbine'].head(5).iterrows():
+        maint_pct = row.get('state_9_percentage', 0)
+        report.append(f"| #{row['turbine_id']} | {row['state_5_percentage']:.1f}% | {maint_pct:.1f}% | "
+                     f"{row['state_2_percentage']:.1f}% | {row['state_3_percentage']:.1f}% | "
+                     f"{row['state_4_percentage']:.1f}% | {row['state_1_percentage']:.1f}% |")
+    
+    report.append("")
+    report.append("完整的单机状态分解数据请参考: `analysis_output/detailed_state_breakdown.csv`")
+    report.append("")
+    report.append("整体状态分布数据请参考: `analysis_output/overall_state_distribution.csv`")
     report.append("")
     report.append("---")
     report.append("")
@@ -712,14 +888,16 @@ def generate_report(stats_df, anomalies, trends, comparison):
     report.append("所有详细数据表已保存至 `analysis_output/` 目录:")
     report.append("")
     report.append("1. `turbine_basic_statistics.csv` - 机组基础统计数据")
-    report.append("2. `long_shutdown_events.csv` - 超长停机事件明细")
-    report.append("3. `frequent_startups.csv` - 频繁启停记录")
-    report.append("4. `monthly_trends.csv` - 月度趋势数据")
-    report.append("5. `seasonal_analysis.csv` - 季节性分析")
-    report.append("6. `equipment_health_scores.csv` - 设备健康度评分")
-    report.append("7. `full_comparison.csv` - 机组全面对比")
-    report.append("8. `top_10_best_turbines.csv` - TOP 10最佳机组")
-    report.append("9. `top_10_worst_turbines.csv` - TOP 10待改进机组")
+    report.append("2. `detailed_state_breakdown.csv` - **[新增]** 每台机组详细状态分解")
+    report.append("3. `overall_state_distribution.csv` - **[新增]** 整体状态分布汇总")
+    report.append("4. `long_shutdown_events.csv` - 超长停机事件明细")
+    report.append("5. `frequent_startups.csv` - 频繁启停记录")
+    report.append("6. `monthly_trends.csv` - 月度趋势数据")
+    report.append("7. `seasonal_analysis.csv` - 季节性分析")
+    report.append("8. `equipment_health_scores.csv` - 设备健康度评分")
+    report.append("9. `full_comparison.csv` - 机组全面对比")
+    report.append("10. `top_10_best_turbines.csv` - TOP 10最佳机组")
+    report.append("11. `top_10_worst_turbines.csv` - TOP 10待改进机组")
     report.append("")
     report.append("---")
     report.append("")
@@ -758,6 +936,9 @@ def main():
         # Basic statistics
         stats_df = calculate_basic_statistics(df)
         
+        # Detailed state breakdown - NEW
+        state_breakdown = calculate_detailed_state_breakdown(df)
+        
         # Anomaly analysis
         anomalies = analyze_anomalies(df)
         
@@ -768,10 +949,10 @@ def main():
         comparison = comparative_analysis(stats_df, trends['health'])
         
         # Save summary tables
-        save_summary_tables(stats_df, anomalies, trends, comparison)
+        save_summary_tables(stats_df, anomalies, trends, comparison, state_breakdown)
         
         # Generate report
-        generate_report(stats_df, anomalies, trends, comparison)
+        generate_report(stats_df, anomalies, trends, comparison, state_breakdown)
         
         print("\n" + "=" * 70)
         print("✅ Analysis completed successfully!")
