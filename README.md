@@ -69,14 +69,16 @@ python3 visualize_results.py
 ### 数据表 (analysis_output/ 目录)
 
 1. **turbine_basic_statistics.csv**: 机组基础统计数据
-2. **long_shutdown_events.csv**: 超长停机事件明细
-3. **frequent_startups.csv**: 频繁启停记录
-4. **monthly_trends.csv**: 月度趋势数据
-5. **seasonal_analysis.csv**: 季节性分析
-6. **equipment_health_scores.csv**: 设备健康度评分
-7. **full_comparison.csv**: 机组全面对比
-8. **top_10_best_turbines.csv**: TOP 10最佳机组
-9. **top_10_worst_turbines.csv**: TOP 10待改进机组
+2. **detailed_state_breakdown.csv**: **[新增]** 每台机组详细状态分解（7个状态）
+3. **overall_state_distribution.csv**: **[新增]** 整体状态分布汇总
+4. **long_shutdown_events.csv**: 超长停机事件明细
+5. **frequent_startups.csv**: 频繁启停记录
+6. **monthly_trends.csv**: 月度趋势数据
+7. **seasonal_analysis.csv**: 季节性分析
+8. **equipment_health_scores.csv**: 设备健康度评分
+9. **full_comparison.csv**: 机组全面对比
+10. **top_10_best_turbines.csv**: TOP 10最佳机组
+11. **top_10_worst_turbines.csv**: TOP 10待改进机组
 
 ## 关键发现
 
@@ -84,6 +86,13 @@ python3 visualize_results.py
 - **平均发电利用率**: 37.93%
 - **平均设备健康度**: 66.95/100
 - **总状态转换次数**: 400,748次
+
+### 🆕 发电利用率低的原因（新增分析）
+- **主要原因**: 维护时间过长 **(39.53%)**
+  - 维护时间几乎等于发电时间
+  - 在非发电时间中占63.7%
+- **次要原因**: 停机时间 (17.00%)
+- **其他因素**: 待机(4.21%)、启机(1.13%)等影响较小
 
 ### 异常情况
 - **超长停机事件**: 181次 (>100小时)
